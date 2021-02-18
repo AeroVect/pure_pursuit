@@ -15,7 +15,6 @@
 #include <string>
 #include <tf2_ros/transform_listener.h>
 #include <vector>
-#include <fstream>
 namespace vec_control {
 class PurePursuit {
 private:
@@ -33,10 +32,6 @@ private:
   bool got_path_ = false;
   bool path_done_ = true;
   int stop_flag_ = 0;
-  float last_x_pose = 0.0;
-  float last_y_pose = 0.0;
-  std::string last_pose_csv;
-  std::ofstream last_pose_stream;
   std::string map_frame_ = "earth";
   std::string base_frame_ = "base_link";
   ros::Time last_msg_time_;
