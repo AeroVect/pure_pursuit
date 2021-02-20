@@ -26,6 +26,7 @@ vec_control::PurePursuit::PurePursuit()
       nh_.subscribe("/pure_pursuit/path", 1, &PurePursuit::path_clk_, this);
   ros::Subscriber obstacles_flag_ =
       nh_.subscribe("/speed_flag", 1, &PurePursuit::obstacles_flag_clk_, this);
+  end_state_pub_ = nh_.advertise<std_msgs::Empty>("/pure_pursuite/stop_signal", 1);
   tfListener_ = new tf2_ros::TransformListener(tfBuffer_);
   l_point_pub_ = nh_.advertise<geometry_msgs::PointStamped>(
       "/pure_pursuit/lookahead_point", 1);
@@ -47,7 +48,7 @@ void vec_control::PurePursuit::path_clk_(const nav_msgs::Path::ConstPtr &msg) {
   got_path_ = true;
   path_done_ = false;
   point_idx_ = 0;
-  closest_point_idx_ = 0;
+  closest_point_idx_ = 5;
   double start_end_dist =
       distance(path_[0].pose.position, path_.back().pose.position);
   ROS_INFO("Start to End Distance: %f", start_end_dist);
@@ -145,7 +146,9 @@ void vec_control::PurePursuit::control_loop_() {
             control_pub_.publish(control_msg_);
             got_path_ = false;
             point_idx_ = 0;
-            closest_point_idx_ = 0;            
+            closest_point_idx_ = 5;
+            std_msgs::Empty empty_msg;
+            end_state_pub_.publish(empty_msg);            
           }
         }
         lookahead_p.point = path_[point_idx_].pose.position;
