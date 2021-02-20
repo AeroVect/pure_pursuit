@@ -136,6 +136,7 @@ void vec_control::PurePursuit::control_loop_() {
           n_laps_--;
           if (n_laps_ > 0) {
             point_idx_ = 0;
+            closest_point_idx_ = 0;
           } else {
             ROS_INFO("Reached final point");            
             control_msg_.drive.steering_angle = 0;
@@ -143,7 +144,8 @@ void vec_control::PurePursuit::control_loop_() {
             control_msg_.header.stamp = ros::Time::now();
             control_pub_.publish(control_msg_);
             got_path_ = false;
-            point_idx_ = 0;            
+            point_idx_ = 0;
+            closest_point_idx_ = 0;            
           }
         }
         lookahead_p.point = path_[point_idx_].pose.position;
