@@ -11,6 +11,7 @@ vec_control::PurePursuit::PurePursuit()
   nh_private.param<double>("car_wheel_base", car_wheel_base_, 0.44);
   nh_private.param<int>("controller_freq", controller_freq_, 10);
   nh_private.param<int>("n_laps", n_laps_, 0);
+  nh_private.param<double>("distance_thresh", distance_thresh_, 0.1);
   nh_private.param<std::string>("map_frame", map_frame_, "earth");
   nh_private.param<std::string>("base_frame", base_frame_, "base_link");
   nh_.param<std::string>("/wps_player/last_pose_csv", last_pose_csv, "/ros_ws/latest_pose.csv");    
@@ -46,6 +47,7 @@ void vec_control::PurePursuit::path_clk_(const nav_msgs::Path::ConstPtr &msg) {
   got_path_ = true;
   path_done_ = false;
   point_idx_ = 0;
+  closest_point_idx_ = 0;
   double start_end_dist =
       distance(path_[0].pose.position, path_.back().pose.position);
   ROS_INFO("Start to End Distance: %f", start_end_dist);
@@ -81,19 +83,34 @@ void vec_control::PurePursuit::control_loop_() {
         for (; point_idx_ < path_.size(); point_idx_++) {
           distance_ = distance2d(path_[point_idx_].pose.position,
                                  base_location_.transform.translation);
-          ROS_INFO("Point ID: %d, Distance %f", point_idx_, distance_);
+          ROS_INFO("Lookahead Point ID: %d, Distance %f", point_idx_, distance_);
           if (distance_ >= ld_) {
             path_[point_idx_].header.stamp =
                 ros::Time::now(); // Set the timestamp to now for the transform
                                   // to work, because it tries to transform the
                                   // point at the time stamp of the input point
-            target_speed = path_[point_idx_].pose.position.z;
+            // target_speed = path_[point_idx_].pose.position.z;
             path_[point_idx_].pose.position.z = 0;
             tfBuffer_.transform(path_[point_idx_], target_point_, base_frame_,
                                 ros::Duration(0.1));
             path_[point_idx_].pose.position.z = target_speed;
             break;
           }
+        }
+        // Find the closest point to the vehicle right now 
+        // and take it's speed as target speed
+        for(;closest_point_idx_ < path_.size(); closest_point_idx_++){
+          double distance = distance2d(path_[closest_point_idx_].pose.position,
+                                 base_location_.transform.translation);
+          if (distance <= distance_thresh_){
+            target_speed = path_[closest_point_idx_].pose.position.z;
+            ROS_INFO("Closest Point ID: %d, Distance %f", closest_point_idx_, distance);
+            break;
+          }
+        }
+        if(closest_point_idx_ >= point_idx_){
+          ROS_WARN("Lookahead Point is behind the vehicle !!");
+          ROS_WARN("Lookahead Point ID:%d Closest point ID: %d", point_idx_, closest_point_idx_);
         }
         // check stop flag
         if (stop_flag_ == 2) {

@@ -6,6 +6,7 @@
 #include "std_msgs/Float64.h"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.h"
 #include <algorithm>
+#include <fstream>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <iostream>
@@ -15,7 +16,6 @@
 #include <string>
 #include <tf2_ros/transform_listener.h>
 #include <vector>
-#include <fstream>
 namespace vec_control {
 class PurePursuit {
 private:
@@ -26,7 +26,9 @@ private:
   double alpha_;
   double car_speed_;
   int controller_freq_;
-  int point_idx_;
+  int point_idx_ = 0;
+  int closest_point_idx_ = 0;
+  double distance_thresh_ = 0.1;
   int last_p_idx_;
   int n_laps_;
   double last_dist_ = std::numeric_limits<double>::infinity();
