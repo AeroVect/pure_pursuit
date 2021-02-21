@@ -7,6 +7,7 @@
 #include "tf2_geometry_msgs/tf2_geometry_msgs.h"
 #include <algorithm>
 #include <fstream>
+#include <geometry_msgs/PoseArray.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <iostream>
@@ -19,6 +20,7 @@
 #include <std_msgs/Bool.h>
 #include <std_msgs/Int32.h>
 #include <vector>
+
 namespace vec_control {
 class PurePursuit {
 private:
@@ -51,6 +53,10 @@ private:
   geometry_msgs::PoseStamped target_point_;
   ackermann_msgs::AckermannDriveStamped control_msg_;
   geometry_msgs::PointStamped lookahead_p;
+  geometry_msgs::PoseArray lidar_obstacles_;
+  bool new_obstacle_received_ = false;
+  int obj_lookahead_;
+  double obj_waypt_distance_threshold_m_;
 
   ros::Publisher control_pub_;
   ros::Publisher l_point_pub_;
@@ -69,6 +75,7 @@ private:
   void odom_clk_(const nav_msgs::Odometry::ConstPtr &msg);
   void path_clk_(const nav_msgs::Path::ConstPtr &msg);
   void obstacles_flag_clk_(const aerovect_msgs::SpeedFlags::ConstPtr &msg);
+  void lidar_obstacles_cb(const geometry_msgs::PoseArray::ConstPtr &msg);
   void control_loop_();
 
 public:
