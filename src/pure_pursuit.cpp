@@ -139,7 +139,8 @@ void vec_control::PurePursuit::control_loop_() {
             point_idx_ = 0;
             closest_point_idx_ = 0;
           } else {
-            ROS_INFO("Reached final point");            
+            ROS_INFO("Reached final point. Distance to the final point: %d", distance_);
+            if(distance_<= distance_thresh_){
             control_msg_.drive.steering_angle = 0;
             control_msg_.drive.speed = 0;
             control_msg_.header.stamp = ros::Time::now();
@@ -148,7 +149,9 @@ void vec_control::PurePursuit::control_loop_() {
             point_idx_ = 0;
             closest_point_idx_ = 5;
             std_msgs::Empty empty_msg;
-            end_state_pub_.publish(empty_msg);            
+            end_state_pub_.publish(empty_msg);    
+            }            
+                    
           }
         }
         lookahead_p.point = path_[point_idx_].pose.position;
