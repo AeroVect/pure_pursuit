@@ -16,6 +16,7 @@
 #include <string>
 #include <tf2_ros/transform_listener.h>
 #include <std_msgs/Empty.h>
+#include <std_msgs/Bool.h>
 #include <vector>
 namespace vec_control {
 class PurePursuit {
@@ -38,6 +39,7 @@ private:
   int stop_flag_ = 0;
   float last_x_pose = 0.0;
   float last_y_pose = 0.0;
+  double turning_angle_;
   std::string last_pose_csv;
   std::ofstream last_pose_stream;
   std::string map_frame_ = "earth";
@@ -52,6 +54,8 @@ private:
   ros::Publisher l_point_pub_;
   ros::Publisher current_speed_pub_;
   ros::Publisher end_state_pub_;
+  ros::Publisher left_turn_pub_;
+  ros::Publisher right_turn_pub_;
   ros::Subscriber ackermann_sub_;
   geometry_msgs::TransformStamped base_location_;
   tf2_ros::Buffer tfBuffer_;

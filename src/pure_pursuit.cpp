@@ -12,6 +12,7 @@ vec_control::PurePursuit::PurePursuit()
   nh_private.param<int>("controller_freq", controller_freq_, 10);
   nh_private.param<int>("n_laps", n_laps_, 0);
   nh_private.param<double>("distance_thresh", distance_thresh_, 0.1);
+  nh_private.param<double>("turning_angle", turning_angle_, 30.0);
   nh_private.param<std::string>("map_frame", map_frame_, "earth");
   nh_private.param<std::string>("base_frame", base_frame_, "base_link");
   nh_.param<std::string>("/wps_player/last_pose_csv", last_pose_csv, "/ros_ws/latest_pose.csv");    
@@ -30,6 +31,8 @@ vec_control::PurePursuit::PurePursuit()
   tfListener_ = new tf2_ros::TransformListener(tfBuffer_);
   l_point_pub_ = nh_.advertise<geometry_msgs::PointStamped>(
       "/pure_pursuit/lookahead_point", 1);
+  left_turn_pub_ = nh_.advertise<std_msgs::Bool>("/left_turn_flash", 1);
+  right_turn_pub_ = nh_.advertise<std_msgs::Bool>("/right_turn_flash", 1);
   // main loop
   control_loop_();
 }
@@ -130,6 +133,28 @@ void vec_control::PurePursuit::control_loop_() {
         control_msg_.drive.speed = target_speed;
         control_msg_.header.stamp = ros::Time::now();
         control_pub_.publish(control_msg_);
+        // Check turning signals
+        double angle = 180 * atan2(target_point_.pose.position.y,target_point_.pose.position.x) / M_PI;
+        ROS_INFO("Lookahead Angle: %f", angle);
+        std_msgs::Bool turning_msg;
+        if(abs(angle)>= turning_angle_){
+          turning_msg.data = true;
+          if (angle > 0 ){
+            ROS_INFO("Turning left");
+            left_turn_pub_.publish(turning_msg);
+            turning_msg.data = false;
+            right_turn_pub_.publish(turning_msg);
+          }else{
+            ROS_INFO("Turning right");
+            right_turn_pub_.publish(turning_msg);
+            turning_msg.data = false;
+            left_turn_pub_.publish(turning_msg);
+          }
+        }else{
+          turning_msg.data = false;
+          left_turn_pub_.publish(turning_msg);
+          right_turn_pub_.publish(turning_msg);
+        }
 
         last_p_idx_ = point_idx_;
         last_dist_ = distance_;
