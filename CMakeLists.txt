@@ -10,6 +10,7 @@ add_compile_options(-std=c++11)
 find_package(catkin REQUIRED COMPONENTS
   ackermann_msgs
   geometry_msgs
+  diagnostic_msgs
   nav_msgs
   roscpp
   std_msgs
@@ -110,7 +111,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
  INCLUDE_DIRS include
 #  LIBRARIES pure_pursuit
-#  CATKIN_DEPENDS ackermann_msgs geometry_msgs nav_msgs roscpp std_msgs tf2_geometry_msgs tf2_ros
+#  CATKIN_DEPENDS ackermann_msgs geometry_msgs diagnostic_msgs nav_msgs roscpp std_msgs tf2_geometry_msgs tf2_ros
 #  DEPENDS system_lib
 )
 

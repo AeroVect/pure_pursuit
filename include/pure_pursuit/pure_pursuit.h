@@ -10,6 +10,7 @@
 #include <geometry_msgs/PoseArray.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TransformStamped.h>
+#include <diagnostic_msgs/DiagnosticArray.h>
 #include <iostream>
 #include <limits>
 #include <nav_msgs/Odometry.h>
@@ -65,12 +66,15 @@ private:
   ros::Publisher left_turn_pub_;
   ros::Publisher right_turn_pub_;
   ros::Publisher path_point_idx_pub_;
+  ros::Publisher diagnostics_pub_;
   ros::Subscriber ackermann_sub_;
   geometry_msgs::TransformStamped base_location_;
   tf2_ros::Buffer tfBuffer_;
   tf2_ros::TransformListener *tfListener_;
 
   ros::Rate *ros_rate_;
+
+  diagnostic_msgs::DiagnosticArray diagnostic_array_;
 
   void odom_clk_(const nav_msgs::Odometry::ConstPtr &msg);
   void path_clk_(const nav_msgs::Path::ConstPtr &msg);
@@ -81,6 +85,7 @@ private:
 public:
   PurePursuit();
   ~PurePursuit();
+  void diagnostic_init();
 };
 
 template <typename T1, typename T2> double distance(T1 pt1, T2 pt2) {

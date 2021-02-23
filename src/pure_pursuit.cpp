@@ -23,6 +23,8 @@ vec_control::PurePursuit::PurePursuit()
   // Publishers and subscribers
   control_pub_ = nh_.advertise<ackermann_msgs::AckermannDriveStamped>(
       "/pure_pursuit/control", 1);
+  diagnostics_pub_ = nh_.advertise<diagnostic_msgs::DiagnosticArray>(
+      "/diagnostics", 5);
   ros::Subscriber odom_sub_ =
       nh_.subscribe("/odom", 1, &PurePursuit::odom_clk_, this);
   ros::Subscriber path_sub_ =
@@ -36,8 +38,24 @@ vec_control::PurePursuit::PurePursuit()
   left_turn_pub_ = nh_.advertise<std_msgs::Bool>("/left_turn_flash", 1);
   right_turn_pub_ = nh_.advertise<std_msgs::Bool>("/right_turn_flash", 1);
   path_point_idx_pub_ = nh_.advertise<std_msgs::Int32>("/pure_pursuit/point_idx", 2);
+  diagnostic_init();
   // main loop
   control_loop_();
+}
+
+void vec_control::PurePursuit::diagnostic_init()
+{
+  diagnostic_msgs::DiagnosticStatus autonomous_status;
+  autonomous_status.level = diagnostic_msgs::DiagnosticStatus::STALE;
+  autonomous_status.name = "autonomous_status";
+  autonomous_status.message = "Initializing";
+  diagnostic_array_.status.push_back(autonomous_status);
+
+  diagnostic_msgs::DiagnosticStatus obstacle_in_path;
+  obstacle_in_path.level = diagnostic_msgs::DiagnosticStatus::OK;
+  obstacle_in_path.name = "obstacle_in_path";
+  obstacle_in_path.message = "Initializing";
+  diagnostic_array_.status.push_back(obstacle_in_path);
 }
 
 void vec_control::PurePursuit::odom_clk_(
@@ -195,8 +213,23 @@ void vec_control::PurePursuit::control_loop_() {
               ROS_INFO("Stopping due to object on path at location <%f, %f>",
                 path_[point_idx_].pose.position.x, path_[point_idx_].pose.position.y);
               delta = 0.0;
+
+              auto & status = diagnostic_array_.status.at(1U);
+              if ("obstacle_in_path" == status.name) {
+                status.level = diagnostic_msgs::DiagnosticStatus::ERROR;
+                std::stringstream ss;
+                ss << "Stopping due to object on path at location: " <<
+                " " << path_[point_idx_].pose.position.x <<", "<< path_[point_idx_].pose.position.y <<"\n";
+                status.message = ss.str();
+              }
               break;
             } else {
+              auto & status = diagnostic_array_.status.at(1U);
+              if ("obstacle_in_path" == status.name) {
+                status.level = diagnostic_msgs::DiagnosticStatus::OK;
+                status.message = "No obstacles in path";
+              }
+
               point_idx_++;
               distance_ = distance2d(path_[point_idx_].pose.position,
                                   base_location_.transform.translation);
@@ -222,6 +255,12 @@ void vec_control::PurePursuit::control_loop_() {
             y_t = target_point_.pose.position.y;
             delta = atan2(2 * car_wheel_base_ * y_t, ld_2);
           }
+        }
+
+        auto & autonomous_status = diagnostic_array_.status.at(0U);
+        if ("autonomous_status" == autonomous_status.name) {
+          autonomous_status.level = diagnostic_msgs::DiagnosticStatus::OK;
+          autonomous_status.message = "Autonomous operations ON";
         }
 
         control_msg_.drive.steering_angle = delta;
@@ -288,12 +327,25 @@ void vec_control::PurePursuit::control_loop_() {
         std_msgs::Int32 idx_msg;
         idx_msg.data = point_idx_;
         path_point_idx_pub_.publish(idx_msg);
-      } 
+        auto & autonomous_status = diagnostic_array_.status.at(0U);
+        if ("autonomous_status" == autonomous_status.name) {
+          autonomous_status.level = diagnostic_msgs::DiagnosticStatus::STALE;
+          autonomous_status.message = "End of path: Autonomous operations OFF";
+        }
+      }
       catch (tf2::TransformException &ex) {
         ROS_WARN("%s", ex.what());
+        auto & autonomous_status = diagnostic_array_.status.at(0U);
+        if ("autonomous_status" == autonomous_status.name) {
+          autonomous_status.level = diagnostic_msgs::DiagnosticStatus::WARN;
+          std::stringstream ss;
+          ss << "Exception in the control loop: " << ex.what() << "\n";
+          autonomous_status.message = ss.str();
+        }
       }
     }
 
+    diagnostics_pub_.publish(diagnostic_array_);
     ros::spinOnce();
     ros_rate_->sleep();
   }
