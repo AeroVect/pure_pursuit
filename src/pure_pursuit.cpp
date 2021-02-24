@@ -24,7 +24,7 @@ vec_control::PurePursuit::PurePursuit()
   control_pub_ = nh_.advertise<ackermann_msgs::AckermannDriveStamped>(
       "/pure_pursuit/control", 1);
   diagnostics_pub_ = nh_.advertise<diagnostic_msgs::DiagnosticArray>(
-      "/diagnostics", 5);
+      "/pure_pursuit/diagnostics", 5);
   ros::Subscriber odom_sub_ =
       nh_.subscribe("/odom", 1, &PurePursuit::odom_clk_, this);
   ros::Subscriber path_sub_ =
