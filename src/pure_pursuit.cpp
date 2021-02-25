@@ -13,6 +13,7 @@ vec_control::PurePursuit::PurePursuit()
   nh_private.param<int>("n_laps", n_laps_, 0);
   nh_private.param<double>("distance_thresh", distance_thresh_, 3.0);
   nh_private.param<double>("turning_angle", turning_angle_, 30.0);
+  nh_private.param<bool>("use_closest_point", use_closest_point_, false);
   nh_private.param<std::string>("map_frame", map_frame_, "earth");
   nh_private.param<std::string>("base_frame", base_frame_, "base_link");
   nh_.param<std::string>("/wps_player/last_pose_csv", last_pose_csv, "/ros_ws/latest_pose.csv");    
@@ -93,14 +94,15 @@ void vec_control::PurePursuit::control_loop_() {
                 ros::Time::now(); // Set the timestamp to now for the transform
                                   // to work, because it tries to transform the
                                   // point at the time stamp of the input point
-            // target_speed = path_[point_idx_].pose.position.z;
+            float tmp = path_[point_idx_].pose.position.z;
             path_[point_idx_].pose.position.z = 0;
             tfBuffer_.transform(path_[point_idx_], target_point_, base_frame_,
                                 ros::Duration(0.1));
-            path_[point_idx_].pose.position.z = target_speed;
+            path_[point_idx_].pose.position.z = tmp;
             break;
           }
         }
+        if(use_closest_point_){
         // Find the closest point to the vehicle right now 
         // and take it's speed as target speed
         for(;closest_point_idx_ < path_.size(); closest_point_idx_++){
@@ -115,6 +117,9 @@ void vec_control::PurePursuit::control_loop_() {
         if(closest_point_idx_ >= point_idx_){
           ROS_WARN("Lookahead Point is behind the vehicle !!");
           ROS_WARN("Lookahead Point ID:%d Closest point ID: %d", point_idx_, closest_point_idx_);
+        }
+        }else{
+          target_speed = path_[point_idx_].pose.position.z;
         }
         // check stop flag
         if (stop_flag_ == 2) {

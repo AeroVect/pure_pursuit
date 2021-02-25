@@ -40,6 +40,7 @@ private:
   float last_x_pose = 0.0;
   float last_y_pose = 0.0;
   double turning_angle_;
+  bool use_closest_point_;
   std::string last_pose_csv;
   std::ofstream last_pose_stream;
   std::string map_frame_ = "earth";
