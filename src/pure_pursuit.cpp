@@ -11,7 +11,7 @@ vec_control::PurePursuit::PurePursuit()
   nh_private.param<double>("car_wheel_base", car_wheel_base_, 0.44);
   nh_private.param<int>("controller_freq", controller_freq_, 10);
   nh_private.param<int>("n_laps", n_laps_, 0);
-  nh_private.param<double>("distance_thresh", distance_thresh_, 3.0);
+  nh_private.param<double>("distance_thresh", distance_thresh_, 1.0);
   nh_private.param<double>("turning_angle", turning_angle_, 30.0);
   nh_private.param<bool>("use_closest_point", use_closest_point_, false);
   nh_private.param<std::string>("map_frame", map_frame_, "earth");
@@ -119,7 +119,12 @@ void vec_control::PurePursuit::control_loop_() {
           ROS_WARN("Lookahead Point ID:%d Closest point ID: %d", point_idx_, closest_point_idx_);
         }
         }else{
-          target_speed = path_[point_idx_].pose.position.z;
+          if(point_idx_ == path_.size()){
+            target_speed = 0.5;
+          }else{
+            target_speed = path_[point_idx_].pose.position.z;
+          }
+          
         }
         // check stop flag
         if (stop_flag_ == 2) {
@@ -163,7 +168,7 @@ void vec_control::PurePursuit::control_loop_() {
 
         last_p_idx_ = point_idx_;
         last_dist_ = distance_;
-        if (point_idx_ == path_.size()) {
+        if(point_idx_ == path_.size()) {
           n_laps_--;
           if (n_laps_ > 0) {
             point_idx_ = 0;
@@ -173,6 +178,7 @@ void vec_control::PurePursuit::control_loop_() {
                                  base_location_.transform.translation); 
             ROS_INFO("Reached final point. Distance to the final point: %f", distance_);
             if(distance_<= distance_thresh_){
+            ROS_INFO("Final point distance: %f", distance_);
             control_msg_.drive.steering_angle = 0;
             control_msg_.drive.speed = 0;
             control_msg_.header.stamp = ros::Time::now();
