@@ -11,7 +11,7 @@ vec_control::PurePursuit::PurePursuit()
   nh_private.param<double>("car_wheel_base", car_wheel_base_, 0.44);
   nh_private.param<int>("controller_freq", controller_freq_, 10);
   nh_private.param<int>("n_laps", n_laps_, 0);
-  nh_private.param<double>("distance_thresh", distance_thresh_, 0.1);
+  nh_private.param<double>("distance_thresh", distance_thresh_, 3.0);
   nh_private.param<double>("turning_angle", turning_angle_, 30.0);
   nh_private.param<std::string>("map_frame", map_frame_, "earth");
   nh_private.param<std::string>("base_frame", base_frame_, "base_link");
