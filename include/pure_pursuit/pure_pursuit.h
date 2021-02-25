@@ -15,6 +15,8 @@
 #include <nav_msgs/Path.h>
 #include <string>
 #include <tf2_ros/transform_listener.h>
+#include <std_msgs/Empty.h>
+#include <std_msgs/Bool.h>
 #include <vector>
 
 namespace vec_control {
@@ -27,13 +29,17 @@ private:
   double alpha_;
   double car_speed_;
   int controller_freq_;
-  int point_idx_;
+  int point_idx_ = 0;
+  int closest_point_idx_ = 0;
+  double distance_thresh_ = 0.1;
   int last_p_idx_;
   int n_laps_;
   double last_dist_ = std::numeric_limits<double>::infinity();
   bool got_path_ = false;
   bool path_done_ = true;
   int stop_flag_ = 0;
+  double turning_angle_;
+  bool use_closest_point_;
   std::string map_frame_ = "earth";
   std::string base_frame_ = "base_link";
   ros::Time last_msg_time_;
@@ -49,6 +55,9 @@ private:
   ros::Publisher control_pub_;
   ros::Publisher l_point_pub_;
   ros::Publisher current_speed_pub_;
+  ros::Publisher end_state_pub_;
+  ros::Publisher left_turn_pub_;
+  ros::Publisher right_turn_pub_;
   ros::Subscriber ackermann_sub_;
   geometry_msgs::TransformStamped base_location_;
   tf2_ros::Buffer tfBuffer_;
