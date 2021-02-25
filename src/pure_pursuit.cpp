@@ -164,7 +164,9 @@ void vec_control::PurePursuit::control_loop_() {
             point_idx_ = 0;
             closest_point_idx_ = 0;
           } else {
-            ROS_INFO("Reached final point. Distance to the final point: %d", distance_);
+            distance_ = distance2d(path_[point_idx_].pose.position,
+                                 base_location_.transform.translation); 
+            ROS_INFO("Reached final point. Distance to the final point: %f", distance_);
             if(distance_<= distance_thresh_){
             control_msg_.drive.steering_angle = 0;
             control_msg_.drive.speed = 0;
