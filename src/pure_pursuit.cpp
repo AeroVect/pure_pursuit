@@ -169,12 +169,7 @@ void vec_control::PurePursuit::control_loop_() {
         last_p_idx_ = point_idx_;
         last_dist_ = distance_;
         if(point_idx_ == path_.size()) {
-          n_laps_--;
-          if (n_laps_ > 0) {
-            point_idx_ = 0;
-            closest_point_idx_ = 0;
-          } else {
-            distance_ = distance2d(path_[point_idx_].pose.position,
+            distance_ = distance2d(path_[point_idx_-1].pose.position,
                                  base_location_.transform.translation); 
             ROS_INFO("Reached final point. Distance to the final point: %f", distance_);
             if(distance_<= distance_thresh_){
@@ -188,9 +183,7 @@ void vec_control::PurePursuit::control_loop_() {
             closest_point_idx_ = 5;
             std_msgs::Empty empty_msg;
             end_state_pub_.publish(empty_msg);    
-            }            
-                    
-          }
+            }                      
         }
         lookahead_p.point = path_[point_idx_].pose.position;
         lookahead_p.header = path_[point_idx_].header;
