@@ -24,7 +24,7 @@ vec_control::PurePursuit::PurePursuit()
   control_pub_ = nh_.advertise<ackermann_msgs::AckermannDriveStamped>(
       "/pure_pursuit/control", 1);
   diagnostics_pub_ = nh_.advertise<diagnostic_msgs::DiagnosticArray>(
-      "/pure_pursuit/diagnostics", 5);
+      "/diagnostics", 5);
   ros::Subscriber odom_sub_ =
       nh_.subscribe("/odom", 1, &PurePursuit::odom_clk_, this);
   ros::Subscriber path_sub_ =
@@ -101,8 +101,20 @@ void vec_control::PurePursuit::control_loop_() {
   double y_t = 0, ld_2 = 0, delta = 0;
   double distance_ = 0;
   double target_speed = 0;
+  auto & autonomous_status = diagnostic_array_.status.at(0U);
+  auto & obs_status = diagnostic_array_.status.at(1U);
   while (ros::ok()) {
     if (got_path_) {
+      if ("obstacle_in_path" == obs_status.name && stop_flag_!= 2) {
+        obs_status.level = diagnostic_msgs::DiagnosticStatus::OK;
+        obs_status.message = "Path clear of obstacles";
+      }
+
+      if ("autonomous_status" == autonomous_status.name) {
+        autonomous_status.level = diagnostic_msgs::DiagnosticStatus::OK;
+        autonomous_status.message = "Autonomous operations ON";
+      }
+
       // get the current robot location by tf base_link -> map
       // iterate over the path points
       // if the distance between a point and robot > lookahead break and take
@@ -156,112 +168,32 @@ void vec_control::PurePursuit::control_loop_() {
         // check stop flag
         // Forcing all the stop flag checks to be false as we no longer use
         // the cost map based obstable detection
-        if (stop_flag_ == 2 && false) {
+        if (stop_flag_ == 2) {
           target_speed = 0;
           ROS_INFO("Stopping due to speed flag 2");
-        } else if (stop_flag_ == 1 && false) {
+          if ("obstacle_in_path" == obs_status.name) {
+            obs_status.level = diagnostic_msgs::DiagnosticStatus::ERROR;
+            obs_status.message = "Obstacle in path";
+          }
+
+          if ("autonomous_status" == autonomous_status.name) {
+            autonomous_status.level = diagnostic_msgs::DiagnosticStatus::ERROR;
+            autonomous_status.message = "Autonomous operations ON";
+          }
+        } else if (stop_flag_ == 1) {
           target_speed /= 2;
           ROS_INFO("slowing due to speed flag 1");
           ROS_INFO("Current Speed %f", target_speed);
-        } else {
-          bool obs_tf_lookup_success = false;
-          bool object_on_path = false;
-          tf2::Stamped<tf2::Transform> obs_tf;
-
-          if (new_obstacle_received_) {
-            const auto header = lidar_obstacles_.header;
-            std::string err;
-            if (tfBuffer_.canTransform(
-                  map_frame_, header.frame_id, header.stamp, ros::Duration(0.1), &err)) {
-              const auto velo_earth = tfBuffer_.lookupTransform(map_frame_, header.frame_id, header.stamp, ros::Duration(0.1));
-              tf2::fromMsg(velo_earth, obs_tf);
-              obs_tf_lookup_success = true;
-            } else {
-              ROS_WARN("Obstacles tf lookup failed: %s", err.c_str());
-            }
-            new_obstacle_received_ = false;
-          }
-
-          base_location_ = tfBuffer_.lookupTransform(
-              map_frame_, base_frame_, ros::Time(0), ros::Duration(0.1));
-          for (; point_idx_ < path_.size();) {
-            bool valid_tf = (!obs_tf.getOrigin().fuzzyZero()) && obs_tf_lookup_success;
-            if (valid_tf) {
-              for (const auto & obj_pose : lidar_obstacles_.poses) {
-                const auto position = obj_pose.position;
-                tf2::Vector3 obj_pose_earth (position.x, position.y, position.z);
-                obj_pose_earth = obs_tf * obj_pose_earth;
-                const auto obj_pose_earth_msg = tf2::toMsg(obj_pose_earth);
-                const auto end_it = (point_idx_ + obj_lookahead_ < path_.size()) ?
-                  obj_lookahead_ : (path_.size() - 1);
-                for (auto it = point_idx_; it < end_it; ++it) {
-                  const auto norm2_dist = distance2d(
-                    path_[point_idx_].pose.position, obj_pose_earth_msg);
-                  if (norm2_dist < obj_waypt_distance_threshold_m_) {
-                    object_on_path = true;
-                    break;
-                  }
-                }
-                if (object_on_path) {
-                  break;
-                }
-              }
-            }
-
-            if (object_on_path) {
-              target_speed = 0.0;
-              ROS_INFO("Stopping due to object on path at location <%f, %f>",
-                path_[point_idx_].pose.position.x, path_[point_idx_].pose.position.y);
-              delta = 0.0;
-
-              auto & status = diagnostic_array_.status.at(1U);
-              if ("obstacle_in_path" == status.name) {
-                status.level = diagnostic_msgs::DiagnosticStatus::ERROR;
-                std::stringstream ss;
-                ss << "Stopping due to object on path at location: " <<
-                " " << path_[point_idx_].pose.position.x <<", "<< path_[point_idx_].pose.position.y <<"\n";
-                status.message = ss.str();
-              }
-              break;
-            } else {
-              auto & status = diagnostic_array_.status.at(1U);
-              if ("obstacle_in_path" == status.name) {
-                status.level = diagnostic_msgs::DiagnosticStatus::OK;
-                status.message = "No obstacles in path";
-              }
-
-              point_idx_++;
-              distance_ = distance2d(path_[point_idx_].pose.position,
-                                  base_location_.transform.translation);
-              ROS_INFO("Point ID: %d, Distance %f", point_idx_, distance_);
-              if (distance_ >= ld_) {
-                path_[point_idx_].header.stamp =
-                    ros::Time::now(); // Set the timestamp to now for the transform
-                                      // to work, because it tries to transform the
-                                      // point at the time stamp of the input point
-                target_speed = path_[point_idx_].pose.position.z;
-                path_[point_idx_].pose.position.z = 0;
-                tfBuffer_.transform(path_[point_idx_], target_point_, base_frame_,
-                                    ros::Duration(0.1));
-                path_[point_idx_].pose.position.z = target_speed;
-                break;
-              }
-            }
-          }
-
-          if (!object_on_path) {
-            // Calculate the steering angle
-            ld_2 = ld_ * ld_;
-            y_t = target_point_.pose.position.y;
-            delta = atan2(2 * car_wheel_base_ * y_t, ld_2);
+          if ("obstacle_in_path" == obs_status.name) {
+            obs_status.level = diagnostic_msgs::DiagnosticStatus::WARN;
+            obs_status.message = "Obstacle close to the path";
           }
         }
 
-        auto & autonomous_status = diagnostic_array_.status.at(0U);
-        if ("autonomous_status" == autonomous_status.name) {
-          autonomous_status.level = diagnostic_msgs::DiagnosticStatus::OK;
-          autonomous_status.message = "Autonomous operations ON";
-        }
+        // Calculate the steering angle
+        ld_2 = ld_ * ld_;
+        y_t = target_point_.pose.position.y;
+        delta = atan2(2 * car_wheel_base_ * y_t, ld_2);
 
         control_msg_.drive.steering_angle = delta;
         control_msg_.drive.speed = target_speed;
@@ -312,8 +244,11 @@ void vec_control::PurePursuit::control_loop_() {
             closest_point_idx_ = 5;
             std_msgs::Empty empty_msg;
             end_state_pub_.publish(empty_msg);    
-            }            
-                    
+            }
+            if ("autonomous_status" == autonomous_status.name) {
+              autonomous_status.level = diagnostic_msgs::DiagnosticStatus::STALE;
+              autonomous_status.message = "End of path: Autonomous operations OFF";
+            }         
           }
         }
         try {
@@ -327,15 +262,9 @@ void vec_control::PurePursuit::control_loop_() {
         std_msgs::Int32 idx_msg;
         idx_msg.data = point_idx_;
         path_point_idx_pub_.publish(idx_msg);
-        auto & autonomous_status = diagnostic_array_.status.at(0U);
-        if ("autonomous_status" == autonomous_status.name) {
-          autonomous_status.level = diagnostic_msgs::DiagnosticStatus::STALE;
-          autonomous_status.message = "End of path: Autonomous operations OFF";
-        }
       }
       catch (tf2::TransformException &ex) {
         ROS_WARN("%s", ex.what());
-        auto & autonomous_status = diagnostic_array_.status.at(0U);
         if ("autonomous_status" == autonomous_status.name) {
           autonomous_status.level = diagnostic_msgs::DiagnosticStatus::WARN;
           std::stringstream ss;
