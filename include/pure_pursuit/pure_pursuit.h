@@ -47,6 +47,7 @@ private:
   geometry_msgs::PoseStamped target_point_;
   ackermann_msgs::AckermannDriveStamped control_msg_;
   geometry_msgs::PointStamped lookahead_p;
+  geometry_msgs::PointStamped object_detection_p;
   geometry_msgs::PoseArray lidar_obstacles_;
   bool new_obstacle_received_ = false;
   int obj_lookahead_;
@@ -54,6 +55,7 @@ private:
 
   ros::Publisher control_pub_;
   ros::Publisher l_point_pub_;
+  ros::Publisher object_point_pub_;
   ros::Publisher current_speed_pub_;
   ros::Publisher end_state_pub_;
   ros::Publisher left_turn_pub_;

@@ -41,6 +41,8 @@ vec_control::PurePursuit::PurePursuit()
   tfListener_ = new tf2_ros::TransformListener(tfBuffer_);
   l_point_pub_ = nh_.advertise<geometry_msgs::PointStamped>(
       "/pure_pursuit/lookahead_point", 1);
+  object_point_pub_ = nh_.advertise<geometry_msgs::PointStamped>(
+      "/pure_pursuit/object_detection_point", 1);
   left_turn_pub_ = nh_.advertise<std_msgs::Bool>("/left_turn_flash", 1);
   right_turn_pub_ = nh_.advertise<std_msgs::Bool>("/right_turn_flash", 1);
   // main loop
@@ -98,50 +100,9 @@ void vec_control::PurePursuit::control_loop_() {
       // this point transform this point to the robot base_link the y component
       // of this point is y_t delta can be computed as atan2(2 * yt * L_, ld_2)
       try {
-        base_location_ = tfBuffer_.lookupTransform(
-            map_frame_, base_frame_, ros::Time(0), ros::Duration(0.1));
 
-        for (; point_idx_ < path_.size(); point_idx_++) {
-          distance_ = distance2d(path_[point_idx_].pose.position,
-                                 base_location_.transform.translation);
-          ROS_INFO("Lookahead Point ID: %d, Distance %f", point_idx_, distance_);
-          if (distance_ >= ld_) {
-            path_[point_idx_].header.stamp =
-                ros::Time::now(); // Set the timestamp to now for the transform
-                                  // to work, because it tries to transform the
-                                  // point at the time stamp of the input point
-            float tmp = path_[point_idx_].pose.position.z;
-            path_[point_idx_].pose.position.z = 0;
-            tfBuffer_.transform(path_[point_idx_], target_point_, base_frame_,
-                                ros::Duration(0.1));
-            path_[point_idx_].pose.position.z = tmp;
-            break;
-          }
-        }
-        if(use_closest_point_){
-        // Find the closest point to the vehicle right now 
-        // and take it's speed as target speed
-        for(;closest_point_idx_ < path_.size(); closest_point_idx_++){
-          double distance = distance2d(path_[closest_point_idx_].pose.position,
-                                 base_location_.transform.translation);
-          if (distance <= distance_thresh_){
-            target_speed = path_[closest_point_idx_].pose.position.z;
-            ROS_INFO("Closest Point ID: %d, Distance %f", closest_point_idx_, distance);
-            break;
-          }
-        }
-        if(closest_point_idx_ >= point_idx_){
-          ROS_WARN("Lookahead Point is behind the vehicle !!");
-          ROS_WARN("Lookahead Point ID:%d Closest point ID: %d", point_idx_, closest_point_idx_);
-        }
-        }else{
-          if(point_idx_ == path_.size()){
-            target_speed = 0.5;
-          }else{
-            target_speed = path_[point_idx_].pose.position.z;
-          }
-          
-        }
+        // OLD CODE HERE
+
         // check stop flag
         // Forcing all the stop flag checks to be false as we no longer use
         // the cost map based obstable detection
@@ -157,71 +118,124 @@ void vec_control::PurePursuit::control_loop_() {
           bool object_on_path = false;
           tf2::Stamped<tf2::Transform> obs_tf;
 
-          if (new_obstacle_received_) {
-            const auto header = lidar_obstacles_.header;
-            std::string err;
-            if (tfBuffer_.canTransform(
-                  map_frame_, header.frame_id, header.stamp, ros::Duration(0.1), &err)) {
-              const auto velo_earth = tfBuffer_.lookupTransform(map_frame_, header.frame_id, header.stamp, ros::Duration(0.1));
-              tf2::fromMsg(velo_earth, obs_tf);
-              obs_tf_lookup_success = true;
-            } else {
-              ROS_WARN("Obstacles tf lookup failed: %s", err.c_str());
-            }
-            new_obstacle_received_ = false;
+          const auto header = lidar_obstacles_.header;
+          std::string err;
+          if (tfBuffer_.canTransform(
+                map_frame_, header.frame_id, header.stamp, ros::Duration(0.1), &err)) {
+            const auto velo_earth = tfBuffer_.lookupTransform(map_frame_, header.frame_id, header.stamp, ros::Duration(0.1));
+            tf2::fromMsg(velo_earth, obs_tf);
+            obs_tf_lookup_success = true;
+          } else {
+            ROS_WARN("Obstacles tf lookup failed: %s", err.c_str());
           }
 
           base_location_ = tfBuffer_.lookupTransform(
               map_frame_, base_frame_, ros::Time(0), ros::Duration(0.1));
-          for (; point_idx_ < path_.size();) {
-            bool valid_tf = (!obs_tf.getOrigin().fuzzyZero()) && obs_tf_lookup_success;
-            if (valid_tf) {
-              for (const auto & obj_pose : lidar_obstacles_.poses) {
-                const auto position = obj_pose.position;
-                tf2::Vector3 obj_pose_earth (position.x, position.y, position.z);
-                obj_pose_earth = obs_tf * obj_pose_earth;
-                const auto obj_pose_earth_msg = tf2::toMsg(obj_pose_earth);
-                const auto end_it = (point_idx_ + obj_lookahead_ < path_.size()) ?
-                  obj_lookahead_ : (path_.size() - 1);
-                for (auto it = point_idx_; it < end_it; ++it) {
-                  const auto norm2_dist = distance2d(
-                    path_[point_idx_].pose.position, obj_pose_earth_msg);
-                  if (norm2_dist < obj_waypt_distance_threshold_m_) {
-                    object_on_path = true;
-                    break;
-                  }
-                }
-                if (object_on_path) {
+          bool valid_tf = (!obs_tf.getOrigin().fuzzyZero()) && obs_tf_lookup_success;
+          if (valid_tf) {
+            // ROS_INFO("Valid tf");
+            size_t end_it;
+            for (const auto & obj_pose : lidar_obstacles_.poses) {
+              const auto position = obj_pose.position;
+              tf2::Vector3 obj_pose_earth (position.x, position.y, position.z);
+              obj_pose_earth = obs_tf * obj_pose_earth;
+              const auto obj_pose_earth_msg = tf2::toMsg(obj_pose_earth);
+              end_it = (point_idx_ + obj_lookahead_ < path_.size()) ?
+                (point_idx_+ obj_lookahead_) : (path_.size() - 1);
+              // ROS_INFO("end_it : %d", int(end_it));
+              for (auto it = point_idx_; it < end_it; ++it) {
+                const auto norm2_dist = distance2d(
+                  path_[it].pose.position, obj_pose_earth_msg);
+                ROS_INFO("Norm 2 dist: %f", norm2_dist);
+                if (norm2_dist < obj_waypt_distance_threshold_m_) {
+                  ROS_INFO("object_on_path");
+                  object_on_path = true;
                   break;
                 }
               }
+              if (object_on_path) {
+                break;
+              }
             }
 
-            if (object_on_path) {
-              target_speed = 0.0;
-              ROS_INFO("Stopping due to object on path at location <%f, %f>",
-                path_[point_idx_].pose.position.x, path_[point_idx_].pose.position.y);
-              delta = 0.0;
-              break;
-            } else {
-              point_idx_++;
+            // publish object detection point
+
+            object_detection_p.point = path_[end_it].pose.position;
+            object_detection_p.header = path_[end_it].header;
+            object_point_pub_.publish(object_detection_p); // Publish the lookahead point
+
+          }
+          
+          if (object_on_path) {
+            target_speed = 0.0;
+            ROS_INFO("Stopping due to object on path at location <%f, %f>",
+              path_[point_idx_].pose.position.x, path_[point_idx_].pose.position.y);
+            delta = 0.0;
+            // break;
+          } else {
+
+            for (; point_idx_ < path_.size(); point_idx_++) {
               distance_ = distance2d(path_[point_idx_].pose.position,
-                                  base_location_.transform.translation);
-              ROS_INFO("Point ID: %d, Distance %f", point_idx_, distance_);
+                                     base_location_.transform.translation);
+              ROS_INFO("Lookahead Point ID: %d, Distance %f", point_idx_, distance_);
               if (distance_ >= ld_) {
                 path_[point_idx_].header.stamp =
                     ros::Time::now(); // Set the timestamp to now for the transform
                                       // to work, because it tries to transform the
                                       // point at the time stamp of the input point
-                target_speed = path_[point_idx_].pose.position.z;
+                float tmp = path_[point_idx_].pose.position.z;
                 path_[point_idx_].pose.position.z = 0;
                 tfBuffer_.transform(path_[point_idx_], target_point_, base_frame_,
                                     ros::Duration(0.1));
-                path_[point_idx_].pose.position.z = target_speed;
+                path_[point_idx_].pose.position.z = tmp;
                 break;
               }
             }
+            if(use_closest_point_){
+              // Find the closest point to the vehicle right now 
+              // and take it's speed as target speed
+              for(;closest_point_idx_ < path_.size(); closest_point_idx_++){
+                double distance = distance2d(path_[closest_point_idx_].pose.position,
+                                       base_location_.transform.translation);
+                if (distance <= distance_thresh_){
+                  target_speed = path_[closest_point_idx_].pose.position.z;
+                  ROS_INFO("Closest Point ID: %d, Distance %f", closest_point_idx_, distance);
+                  break;
+                }
+              }
+              if(closest_point_idx_ >= point_idx_){
+                ROS_WARN("Lookahead Point is behind the vehicle !!");
+                ROS_WARN("Lookahead Point ID:%d Closest point ID: %d", point_idx_, closest_point_idx_);
+              }
+            }else{
+              if(point_idx_ == path_.size()){
+                target_speed = 0.5;
+              }else{
+                target_speed = path_[point_idx_].pose.position.z;
+              }
+              
+            }
+
+            ROS_INFO("Intermediate target speed : %f", target_speed);
+
+            // point_idx_++;
+            // distance_ = distance2d(path_[point_idx_].pose.position,
+            //                     base_location_.transform.translation);
+            // ROS_INFO("Point ID: %d, Distance %f", point_idx_, distance_);
+            // if (distance_ >= ld_) {
+            //   path_[point_idx_].header.stamp =
+            //       ros::Time::now(); // Set the timestamp to now for the transform
+            //                         // to work, because it tries to transform the
+            //                         // point at the time stamp of the input point
+            //   target_speed = path_[point_idx_].pose.position.z;
+            //   path_[point_idx_].pose.position.z = 0;
+            //   tfBuffer_.transform(path_[point_idx_], target_point_, base_frame_,
+            //                       ros::Duration(0.1));
+            //   path_[point_idx_].pose.position.z = target_speed;
+            //   break;
+            // }
           }
+          
 
           if (!object_on_path) {
             // Calculate the steering angle
@@ -234,6 +248,8 @@ void vec_control::PurePursuit::control_loop_() {
         control_msg_.drive.steering_angle = delta;
         control_msg_.drive.speed = target_speed;
         control_msg_.header.stamp = ros::Time::now();
+        ROS_INFO("target speed : %f", target_speed);
+
         control_pub_.publish(control_msg_);
         // Check turning signals
         double angle = 180 * atan2(target_point_.pose.position.y,target_point_.pose.position.x) / M_PI;
