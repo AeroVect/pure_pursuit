@@ -34,6 +34,7 @@ vec_control::PurePursuit::PurePursuit()
       "/pure_pursuit/lookahead_point", 1);
   left_turn_pub_ = nh_.advertise<std_msgs::Bool>("/left_turn_flash", 1);
   right_turn_pub_ = nh_.advertise<std_msgs::Bool>("/right_turn_flash", 1);
+  path_point_idx_pub_ = nh_.advertise<std_msgs::Int32>("/pure_pursuit/point_idx", 2);
   // main loop
   control_loop_();
 }
@@ -188,6 +189,10 @@ void vec_control::PurePursuit::control_loop_() {
         lookahead_p.point = path_[point_idx_].pose.position;
         lookahead_p.header = path_[point_idx_].header;
         l_point_pub_.publish(lookahead_p); // Publish the lookahead point
+
+        std_msgs::Int32 idx_msg;
+        idx_msg.data = point_idx_;
+        path_point_idx_pub_.publish(idx_msg);
       } 
       catch (tf2::TransformException &ex) {
         ROS_WARN("%s", ex.what());

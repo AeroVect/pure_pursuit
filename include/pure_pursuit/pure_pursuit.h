@@ -17,6 +17,7 @@
 #include <tf2_ros/transform_listener.h>
 #include <std_msgs/Empty.h>
 #include <std_msgs/Bool.h>
+#include <std_msgs/Int32.h>
 #include <vector>
 namespace vec_control {
 class PurePursuit {
@@ -57,6 +58,7 @@ private:
   ros::Publisher end_state_pub_;
   ros::Publisher left_turn_pub_;
   ros::Publisher right_turn_pub_;
+  ros::Publisher path_point_idx_pub_;
   ros::Subscriber ackermann_sub_;
   geometry_msgs::TransformStamped base_location_;
   tf2_ros::Buffer tfBuffer_;
