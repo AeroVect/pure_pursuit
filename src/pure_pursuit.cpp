@@ -174,7 +174,7 @@ void vec_control::PurePursuit::control_loop_() {
             point_idx_ = 0;
             closest_point_idx_ = 0;
           } else {
-            distance_ = distance2d(path_[point_idx_].pose.position,
+            distance_ = distance2d(path_[path_.size()-1].pose.position,
                                  base_location_.transform.translation); 
             ROS_INFO("Reached final point. Distance to the final point: %f", distance_);
             if(distance_<= distance_thresh_){
@@ -192,9 +192,14 @@ void vec_control::PurePursuit::control_loop_() {
                     
           }
         }
-        lookahead_p.point = path_[point_idx_].pose.position;
-        lookahead_p.header = path_[point_idx_].header;
-        l_point_pub_.publish(lookahead_p); // Publish the lookahead point
+        try {
+          lookahead_p.point = path_[point_idx_].pose.position;
+          lookahead_p.header = path_[point_idx_].header;
+          l_point_pub_.publish(lookahead_p); // Publish the lookahead point
+        } catch (...) {
+
+        }
+        
       } 
       catch (tf2::TransformException &ex) {
         ROS_WARN("%s", ex.what());
