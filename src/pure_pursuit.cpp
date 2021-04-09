@@ -17,6 +17,10 @@ vec_control::PurePursuit::PurePursuit()
   nh_private.param<std::string>("base_frame", base_frame_, "base_link");
   nh_private.param<int>("obj_lookahead", obj_lookahead_, 20);
   nh_private.param<double>("obj_waypt_distance_threshold_m", obj_waypt_distance_threshold_m_, 3.0);
+  nh_private.param<bool>("use_constant_speed", use_constant_speed_, false);
+  nh_private.param<double>("constant_speed", constant_speed_, 1.0);
+  nh_private.param<bool>("slow_on_turns", slow_on_turns_, false);
+  nh_private.param<double>("turns_speed_gain", turns_speed_gain_, 0.5);
 
   ld_ = min_ld_;
   ros_rate_ = new ros::Rate(controller_freq_);
@@ -141,7 +145,18 @@ void vec_control::PurePursuit::control_loop_() {
             break;
           }
         }
-        if(use_closest_point_){
+        if (use_constant_speed_)
+        {
+          if (point_idx_ == path_.size())
+          {
+            target_speed = 0.5;
+          }
+          else
+          {
+            target_speed = constant_speed_;
+          }
+        }
+        else if(use_closest_point_){
         // Find the closest point to the vehicle right now 
         // and take it's speed as target speed
         for(;closest_point_idx_ < path_.size(); closest_point_idx_++){
@@ -158,6 +173,7 @@ void vec_control::PurePursuit::control_loop_() {
           ROS_WARN("Lookahead Point ID:%d Closest point ID: %d", point_idx_, closest_point_idx_);
         }
         }else{
+          // Get speed value from the lookahead point
           if(point_idx_ == path_.size()){
             target_speed = 0.5;
           }else{
@@ -195,15 +211,15 @@ void vec_control::PurePursuit::control_loop_() {
         y_t = target_point_.pose.position.y;
         delta = atan2(2 * car_wheel_base_ * y_t, ld_2);
 
-        control_msg_.drive.steering_angle = delta;
-        control_msg_.drive.speed = target_speed;
-        control_msg_.header.stamp = ros::Time::now();
-        control_pub_.publish(control_msg_);
         // Check turning signals
         double angle = 180 * atan2(target_point_.pose.position.y,target_point_.pose.position.x) / M_PI;
         ROS_INFO("Lookahead Angle: %f", angle);
         std_msgs::Bool turning_msg;
         if(abs(angle)>= turning_angle_){
+          // multiply the target speed with gain < 1 to slow down on turns
+          if(slow_on_turns_){
+            target_speed *= turns_speed_gain_;
+          }
           turning_msg.data = true;
           if (angle > 0 ){
             ROS_INFO("Turning left");
@@ -221,6 +237,11 @@ void vec_control::PurePursuit::control_loop_() {
           left_turn_pub_.publish(turning_msg);
           right_turn_pub_.publish(turning_msg);
         }
+
+        control_msg_.drive.steering_angle = delta;
+        control_msg_.drive.speed = target_speed;
+        control_msg_.header.stamp = ros::Time::now();
+        control_pub_.publish(control_msg_);
 
         last_p_idx_ = point_idx_;
         last_dist_ = distance_;

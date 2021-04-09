@@ -58,6 +58,10 @@ private:
   bool new_obstacle_received_ = false;
   int obj_lookahead_;
   double obj_waypt_distance_threshold_m_;
+  bool use_constant_speed_ = false;
+  double constant_speed_ = 1.0;
+  bool slow_on_turns_ = false;
+  double turns_speed_gain_ = 0.5;
 
   ros::Publisher control_pub_;
   ros::Publisher l_point_pub_;
