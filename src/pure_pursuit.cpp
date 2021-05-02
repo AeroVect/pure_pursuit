@@ -28,7 +28,7 @@ vec_control::PurePursuit::PurePursuit()
   ros::Subscriber odom_sub_ =
       nh_.subscribe("/odom", 1, &PurePursuit::odom_clk_, this);
   ros::Subscriber path_sub_ =
-      nh_.subscribe("/pure_pursuit/path", 1, &PurePursuit::path_clk_, this);
+      nh_.subscribe("/pure_pursuit/trajectory", 1, &PurePursuit::path_clk_, this);
   ros::Subscriber obstacles_flag_ =
       nh_.subscribe("/speed_flag", 1, &PurePursuit::obstacles_flag_clk_, this);
   end_state_pub_ = nh_.advertise<std_msgs::Empty>("/pure_pursuite/stop_signal", 1);
@@ -73,16 +73,16 @@ void vec_control::PurePursuit::lidar_obstacles_cb(
   }
 }
 
-void vec_control::PurePursuit::path_clk_(const nav_msgs::Path::ConstPtr &msg) {
+void vec_control::PurePursuit::path_clk_(const aerovect_msgs::Trajectory::ConstPtr &msg) {
   ROS_INFO("New path is received.");
-  path_ = msg->poses;
+  trajectory_ = *(msg);
   // path_.push_back(msg->poses[0]);
   got_path_ = true;
   path_done_ = false;
   point_idx_ = 0;
   closest_point_idx_ = 5;
   double start_end_dist =
-      distance(path_[0].pose.position, path_.back().pose.position);
+      distance(trajectory_.waypoints[0].pose.pose.position, trajectory_.waypoints.back().pose.pose.position);
   ROS_INFO("Start to End Distance: %f", start_end_dist);
   ROS_INFO("Min lookup distance: %f", min_ld_);
   if (start_end_dist > min_ld_ && n_laps_ > 0) {
@@ -124,31 +124,28 @@ void vec_control::PurePursuit::control_loop_() {
         base_location_ = tfBuffer_.lookupTransform(
             map_frame_, base_frame_, ros::Time(0), ros::Duration(0.1));
 
-        for (; point_idx_ < path_.size(); point_idx_++) {
-          distance_ = distance2d(path_[point_idx_].pose.position,
+        for (; point_idx_ < trajectory_.waypoints.size(); point_idx_++) {
+          distance_ = distance2d(trajectory_.waypoints[point_idx_].pose.pose.position,
                                  base_location_.transform.translation);
           ROS_INFO("Lookahead Point ID: %d, Distance %f", point_idx_, distance_);
           if (distance_ >= ld_) {
-            path_[point_idx_].header.stamp =
+            trajectory_.waypoints[point_idx_].pose.header.stamp =
                 ros::Time::now(); // Set the timestamp to now for the transform
                                   // to work, because it tries to transform the
                                   // point at the time stamp of the input point
-            float tmp = path_[point_idx_].pose.position.z;
-            path_[point_idx_].pose.position.z = 0;
-            tfBuffer_.transform(path_[point_idx_], target_point_, base_frame_,
+            tfBuffer_.transform(trajectory_.waypoints[point_idx_].pose, target_point_, base_frame_,
                                 ros::Duration(0.1));
-            path_[point_idx_].pose.position.z = tmp;
             break;
           }
         }
         if(use_closest_point_){
         // Find the closest point to the vehicle right now 
         // and take it's speed as target speed
-        for(;closest_point_idx_ < path_.size(); closest_point_idx_++){
-          double distance = distance2d(path_[closest_point_idx_].pose.position,
+        for(;closest_point_idx_ < trajectory_.waypoints.size(); closest_point_idx_++){
+          double distance = distance2d(trajectory_.waypoints[closest_point_idx_].pose.pose.position,
                                  base_location_.transform.translation);
           if (distance <= distance_thresh_){
-            target_speed = path_[closest_point_idx_].pose.position.z;
+            target_speed = trajectory_.waypoints[closest_point_idx_].velocity;
             ROS_INFO("Closest Point ID: %d, Distance %f", closest_point_idx_, distance);
             break;
           }
@@ -158,10 +155,10 @@ void vec_control::PurePursuit::control_loop_() {
           ROS_WARN("Lookahead Point ID:%d Closest point ID: %d", point_idx_, closest_point_idx_);
         }
         }else{
-          if(point_idx_ == path_.size()){
+          if(point_idx_ == trajectory_.waypoints.size()){
             target_speed = 0.5;
           }else{
-            target_speed = path_[point_idx_].pose.position.z;
+            target_speed = trajectory_.waypoints[point_idx_].velocity;
           }
           
         }
@@ -224,13 +221,13 @@ void vec_control::PurePursuit::control_loop_() {
 
         last_p_idx_ = point_idx_;
         last_dist_ = distance_;
-        if(point_idx_ == path_.size()) {
+        if(point_idx_ == trajectory_.waypoints.size()) {
           n_laps_--;
           if (n_laps_ > 0) {
             point_idx_ = 0;
             closest_point_idx_ = 0;
           } else {
-            distance_ = distance2d(path_[path_.size()-1].pose.position,
+            distance_ = distance2d(trajectory_.waypoints[trajectory_.waypoints.size()-1].pose.pose.position,
                                  base_location_.transform.translation); 
             ROS_INFO("Reached final point. Distance to the final point: %f", distance_);
             if(distance_<= distance_thresh_){
@@ -252,8 +249,8 @@ void vec_control::PurePursuit::control_loop_() {
           }
         }
         try {
-          lookahead_p.point = path_[point_idx_].pose.position;
-          lookahead_p.header = path_[point_idx_].header;
+          lookahead_p.point = trajectory_.waypoints[point_idx_].pose.pose.position;
+          lookahead_p.header = trajectory_.waypoints[point_idx_].pose.header;
           l_point_pub_.publish(lookahead_p); // Publish the lookahead point
         } catch (...) {
 

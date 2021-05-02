@@ -21,6 +21,8 @@
 #include <std_msgs/Bool.h>
 #include <std_msgs/Int32.h>
 #include <vector>
+#include "aerovect_msgs/Waypoint.h"
+#include "aerovect_msgs/Trajectory.h"
 
 namespace vec_control {
 class PurePursuit {
@@ -50,7 +52,7 @@ private:
   std::string map_frame_ = "earth";
   std::string base_frame_ = "base_link";
   ros::Time last_msg_time_;
-  std::vector<geometry_msgs::PoseStamped> path_;
+  aerovect_msgs::Trajectory trajectory_;
   geometry_msgs::PoseStamped target_point_;
   ackermann_msgs::AckermannDriveStamped control_msg_;
   geometry_msgs::PointStamped lookahead_p;
@@ -77,7 +79,7 @@ private:
   diagnostic_msgs::DiagnosticArray diagnostic_array_;
 
   void odom_clk_(const nav_msgs::Odometry::ConstPtr &msg);
-  void path_clk_(const nav_msgs::Path::ConstPtr &msg);
+  void path_clk_(const aerovect_msgs::Trajectory::ConstPtr &msg);
   void obstacles_flag_clk_(const aerovect_msgs::SpeedFlags::ConstPtr &msg);
   void lidar_obstacles_cb(const geometry_msgs::PoseArray::ConstPtr &msg);
   void control_loop_();
